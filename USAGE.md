@@ -18,8 +18,6 @@ if msg:
 can2040.stop()                          # switch CAN off and release the bus
 ```
 
-A complete, commented example is in [`example.py`](example.py).
-
 ## Commands
 
 ### `can2040.start(rx, tx, bitrate=500000, pio=0)`
