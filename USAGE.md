@@ -54,7 +54,7 @@ ideally in a `try/finally` block. Otherwise can2040 keeps running after you abor
     from machine import Pin
     Pin(1, Pin.OUT, value=1)
     ```
-  - Or add a 10 kΩ resistor between the TX line and 3V3 (the cleanest solution).
+  - Or add a 10 kΩ resistor between the TX line and 3V3.
 - **Dropped messages:** Received messages are stored in a buffer of 128 slots. Call `recv()` regularly.
   The third value of `stats()` shows whether messages were dropped.
 - **Timing:** Long interrupt-disabled phases, such as writing to flash, can cost messages under high bus load.
