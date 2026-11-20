@@ -1,0 +1,36 @@
+name: Build Pico firmware with can2040
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential gcc-arm-none-eabi libnewlib-arm-none-eabi python3
+
+      - name: Get MicroPython
+        run: |
+          git clone --depth 1 --branch v1.27.0 https://github.com/micropython/micropython
+          make -C micropython/mpy-cross
+          make -C micropython/ports/rp2 BOARD=RPI_PICO submodules
+
+      - name: Get can2040
+        run: |
+          git clone --depth 1 https://github.com/KevinOConnor/can2040
+          cp can2040/src/can2040.c can2040/src/can2040.h usermod/
+
+      - name: Build firmware
+        run: |
+          make -C micropython/ports/rp2 -j4 BOARD=RPI_PICO USER_C_MODULES=$GITHUB_WORKSPACE/usermod/micropython.cmake
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-uf2
+          path: micropython/ports/rp2/build-RPI_PICO/firmware.uf2
