@@ -3,12 +3,16 @@
 #include "py/obj.h"
 #include "hardware/irq.h"
 #include "hardware/clocks.h"
+#include "hardware/pio.h"
+#include "hardware/gpio.h"
 #include "can2040.h"
 
 #define RX_BUF_SIZE 128
 
 static struct can2040 cbus;
 static bool started = false;
+static uint32_t active_pio = 0;
+static int active_tx = -1;
 
 static struct can2040_msg rx_buf[RX_BUF_SIZE];
 static volatile uint32_t rx_head = 0, rx_tail = 0;
@@ -67,9 +71,28 @@ static mp_obj_t mod_start(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_
     can2040_start(&cbus, clock_get_hz(clk_sys), a[ARG_bitrate].u_int,
                   a[ARG_rx].u_int, a[ARG_tx].u_int);
     started = true;
+    active_pio = pio;
+    active_tx = a[ARG_tx].u_int;
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(mod_start_obj, 0, mod_start);
+
+// can2040.stop(): switch CAN off, release the bus (TX pin high = recessive)
+static mp_obj_t mod_stop(void) {
+    if (started) {
+        uint irq = (active_pio == 0) ? PIO0_IRQ_0 : PIO1_IRQ_0;
+        irq_set_enabled(irq, false);
+        irq_remove_handler(irq, pio_irq_handler);
+        PIO pio = (active_pio == 0) ? pio0 : pio1;
+        pio_set_sm_mask_enabled(pio, 0xF, false);
+        gpio_init(active_tx);
+        gpio_set_dir(active_tx, GPIO_OUT);
+        gpio_put(active_tx, 1);
+        started = false;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_stop_obj, mod_stop);
 
 // can2040.send(id, data=None, extended=False, rtr=False) -> True/False
 static mp_obj_t mod_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
@@ -141,6 +164,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mod_stats_obj, mod_stats);
 static const mp_rom_map_elem_t can2040_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_can2040) },
     { MP_ROM_QSTR(MP_QSTR_start),    MP_ROM_PTR(&mod_start_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop),     MP_ROM_PTR(&mod_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR_send),     MP_ROM_PTR(&mod_send_obj) },
     { MP_ROM_QSTR(MP_QSTR_recv),     MP_ROM_PTR(&mod_recv_obj) },
     { MP_ROM_QSTR(MP_QSTR_stats),    MP_ROM_PTR(&mod_stats_obj) },
